@@ -1,0 +1,37 @@
+{
+  "fileExtensions": {
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".py": "python",
+    ".rb": "ruby",
+    ".java": "java",
+    ".go": "go",
+    ".php": "php",
+    ".cs": "csharp",
+    ".cpp": "cpp",
+    ".rs": "rust"
+  },
+  "manifestFiles": {
+    "package.json": "javascript",
+    "requirements.txt": "python",
+    "Gemfile": "ruby",
+    "pom.xml": "java",
+    "go.mod": "go",
+    "composer.json": "php",
+    "*.csproj": "csharp",
+    "CMakeLists.txt": "cpp",
+    "Cargo.toml": "rust"
+  },
+  "configFiles": [
+    ".eslintrc.json",
+    ".prettierrc",
+    "tsconfig.json",
+    "pytest.ini",
+    ".rubocop.yml",
+    "checkstyle.xml",
+    ".golangci.yml",
+    "phpcs.xml",
+    ".editorconfig",
+    "rustfmt.toml"
+  ]
+}
