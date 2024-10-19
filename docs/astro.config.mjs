@@ -20,9 +20,9 @@ export default defineConfig({
       label: '[list] Features',
       link: '/features/'
     }, {
-      label: '[box] Guides',
+      label: '[box] Project Specs',
       autogenerate: {
-        directory: 'guides'
+        directory: 'project-specs'
       }
     }, {
       label: '[book] Reference',
