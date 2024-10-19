@@ -43,7 +43,8 @@ contract ZKCodeReview {
     mapping(bytes32 => Circuit) public circuits;
     mapping(uint256 => Issue) public issues;
     mapping(uint256 => Solution) public solutions;
-    bytes32[] public circuitIds;
+    mapping(uint256 => bytes32) public circuitIds;
+    uint256 public circuitCount;
 
     uint256 public issueCount;
     IDAO public dao;
@@ -66,8 +67,15 @@ contract ZKCodeReview {
         bytes32 circuitId = keccak256(abi.encodePacked(name, ipfsCID));
         require(circuits[circuitId].verifier == address(0), "Circuit already exists");
 
-        circuits[circuitId] = Circuit(name, description, ipfsCID, verifier, true);
-        circuitIds.push(circuitId);
+        circuits[circuitId] = Circuit({
+            name: name,
+            description: description,
+            ipfsCID: ipfsCID,
+            verifier: verifier,
+            active: true
+        });
+        circuitCount++;
+        circuitIds[circuitCount] = circuitId;
         emit CircuitRegistered(circuitId, name, ipfsCID);
     }
 
@@ -80,15 +88,15 @@ contract ZKCodeReview {
         require(circuits[circuitId].active, "Circuit is not active");
         
         issueCount++;
-        issues[issueCount] = Issue(
-            issueCount,
-            msg.sender,
-            description,
-            codeSnippet,
-            circuitId,
-            msg.value,
-            false
-        );
+        issues[issueCount] = Issue({
+            id: issueCount,
+            creator: msg.sender,
+            description: description,
+            codeSnippet: codeSnippet,
+            circuitId: circuitId,
+            bounty: msg.value,
+            resolved: false
+        });
         
         dao.initiateBounty(issueCount, msg.value);
         emit IssueCreated(issueCount, msg.sender, msg.value);
@@ -109,7 +117,11 @@ contract ZKCodeReview {
         
         require(verifier.verifyProof(a, b, c, input), "Invalid proof");
         
-        solutions[issueId] = Solution(msg.sender, solutionCID, true);
+        solutions[issueId] = Solution({
+            contributor: msg.sender,
+            solutionCID: solutionCID,
+            verified: true
+        });
         issue.resolved = true;
         
         dao.releaseBounty(issueId, msg.sender);
@@ -119,7 +131,7 @@ contract ZKCodeReview {
     }
 
     function getCircuitCount() external view returns (uint256) {
-        return circuitIds.length;
+        return circuitCount;
     }
 
     function getCircuitDetails(bytes32 circuitId) external view returns (

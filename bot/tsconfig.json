@@ -1,21 +1,14 @@
 {
     "compilerOptions": {
-      "target": "ES2020",                 // Target modern JavaScript
-      "module": "ESNext",                 // Supports ES modules
-      "moduleResolution": "node",         // Resolves node modules
-      "esModuleInterop": true,            // Allows default import from commonjs modules
-      "skipLibCheck": true,               // Skip type checking of .d.ts files
-      "strict": true,                     // Enable all strict type-checking options
-      "outDir": "./dist",                 // Output directory for compiled files
-      "rootDir": "./",                 // Root directory for your TypeScript source files
-      "forceConsistentCasingInFileNames": true,  // Enforce consistent casing in file names
-      "noImplicitAny": true               // Disallow `any` types unless explicitly specified
+      "target": "ES2020",
+      "module": "commonjs",
+      "esModuleInterop": true,
+      "resolveJsonModule": true,
+      "strict": true,
+      "outDir": "./dist",
+      "rootDir": "./",
+      "types": ["node"]
     },
-    "include": [
-      "index.ts"                       // Include all TypeScript files in the 'bot' directory
-    ],
-    "exclude": [
-      "node_modules"                      // Exclude node_modules from the TypeScript compiler
-    ]
+    "include": ["*.ts", "abis/*.json"],
+    "exclude": ["node_modules"]
   }
-  

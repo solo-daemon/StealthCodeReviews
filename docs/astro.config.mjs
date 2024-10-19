@@ -16,13 +16,11 @@ export default defineConfig({
     sidebar: [{
       label: '[home] Home',
       link: '/'
-    }, {
-      label: '[list] Features',
-      link: '/features/'
-    }, {
-      label: '[box] Guides',
+    }, 
+      {
+      label: '[box] TechSpecs',
       autogenerate: {
-        directory: 'guides'
+        directory: 'TechSpecs'
       }
     }, {
       label: '[book] Reference',

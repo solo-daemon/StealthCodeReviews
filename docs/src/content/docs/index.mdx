@@ -1,36 +1,43 @@
 ---
 title: Stealth Code Reviews
-description: Get started building your docs site with Starlight & the Ion theme.
+description: A cutting-edge tool for stealth code reviews, ensuring secure and anonymous feedback on code submissions.
 tableOfContents: false
 hero:
-  tagline: Congrats on setting up a new Starlight project!
+  tagline: Stealth Code Reviews is a next-gen platform that allows teams to conduct anonymous, secure, and efficient code reviews. Our tool is designed to provide detailed feedback while protecting the identity of the reviewer, promoting a safe and transparent code review environment.
+
   image:
     file: ../../assets/stealth-code-reviews-logo.png
-  actions:
-    - text: Features Overview
-      link: /starlight-ion-theme/features/
-      icon: right-arrow
-      variant: primary
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
-      icon: external
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import EthereumIcon from '../../icons/ethereum.svg';
+
+
+## TechStack
 
 <CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+	<Card title="Astro" icon="rocket">
+		A fast and modern static site generator that helps build lightweight and optimized documentation sites.
 	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
+	<Card title="VS Code" icon="seti:html">
+		Development is streamlined using **VS Code** with robust extension support for faster and efficient coding.
 	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
+	<Card title="GitHub Bot" icon="github">
+		Our **GitHub bot** is integrated to automate tasks like issue creation, verification, and PR creation, powered by **Probot**.
 	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="IPFS" icon="cloudflare">
+		Decentralized storage is managed through **IPFS**, ensuring data integrity and easy accessibility.
 	</Card>
+	<Card title="Ethereum" icon="seti:ethereum">
+		Blockchain technology for decentralized storage and secure review history, ensuring transparency and immutability.
+	</Card>
+	<Card title="zk-SNARKs" icon="seti:lock">
+		Zero-knowledge proofs for secure and private validation of feedback without revealing sensitive information.
+	</Card>
+	 <Card title="Solidity" icon="seti:crystal">
+        A programming language specifically designed for developing smart contracts on the Ethereum blockchain.
+    </Card>
 </CardGrid>

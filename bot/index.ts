@@ -1,185 +1,261 @@
 import { Probot } from 'probot';
 import { ethers } from 'ethers';
-import { create } from 'ipfs-http-client';
-import fs from 'fs/promises';
-import path from 'path';
+import express from 'express';
+import bodyParser from 'body-parser';
+import { create as ipfsHttpClient } from 'ipfs-http-client';
 
-
-const ZK_REVIEW_ABI:any=[]
-const DAO_ABI:any=[]
-
+// Import ABIs (assuming they are available)
+import ZK_REVIEW_ABI from './abis/ZKReviewABI.json';
+import DAO_ABI from './abis/DAOABI.json';
+import GITHUB_BOT_ABI from './abis/GitHubBotABI.json';
 
 const provider = new ethers.JsonRpcProvider(process.env.PROVIDER_URL!);
-const signer = new ethers.Wallet(process.env.KEY!, provider);
+const signer = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
 const zkReviewContract = new ethers.Contract(process.env.ZK_REVIEW_CONTRACT_ADDRESS!, ZK_REVIEW_ABI, signer);
 const daoContract = new ethers.Contract(process.env.DAO_CONTRACT_ADDRESS!, DAO_ABI, signer);
-const ipfs = create({ url: process.env.IPFS_URL });
-const contextMap: Record<string, any> = {};
+const githubBotContract = new ethers.Contract(process.env.GITHUB_BOT_CONTRACT_ADDRESS!, GITHUB_BOT_ABI, signer);
+const ipfs = ipfsHttpClient({ url: process.env.IPFS_URL });
+
+const REPO_OWNER = 'solo-daemon';
+const REPO_NAME = 'example-syntax-error';
+
 export default function(app: Probot) {
-  app.on('issues.opened', async (context) => {
-    const issueId = context.payload.issue.id.toString();
-    contextMap[issueId] = context; 
-    const issueBody = context.payload.issue.body as string;
-    const issueCreator = context.payload.issue.user.login;
+  const expressApp = express();
+  expressApp.use(bodyParser.json());
 
-    const circuitId = parseCircuitId(issueBody);
-    const bountyAmount = parseBountyAmount(issueBody);
-    const metamaskId = parseMetamaskId(issueBody);
+  expressApp.post('/github', async (req, res) => {
+    const githubEvent = req.headers['x-github-event'] as string;
+    const { body } = req;
 
-    if (!circuitId || !bountyAmount || !metamaskId) {
-      await context.octokit.issues.createComment(context.issue({
-        body: 'Please provide circuitId, bountyAmount, and metamaskId in the issue description.'
-      }));
-      return;
-    }
+    console.log(`Received GitHub event: ${githubEvent}`);
 
     try {
-      const tx = await zkReviewContract.createIssue(
-        context.payload.issue.title,
-        context.payload.issue.body,
-        circuitId,
-        { value: ethers.parseEther(bountyAmount) }
-      );
-     // Log transaction response
-  console.log("Transaction response:", tx);
-
-  const receipt = await tx.wait();
-  console.log("Transaction receipt:", receipt);
-
-      const issueId = await zkReviewContract.issueCount();
-
-      const circuits = await fetchCircuits();
-      const circuitList = formatCircuitList(circuits);
-
-      await context.octokit.issues.update(context.issue({
-        body: `${issueBody}\n\n---\nOn-chain Issue ID: ${issueId}\nMetamask ID: ${metamaskId}\n\nAvailable Circuits:\n${circuitList}`
-      }));
-
-      await context.octokit.issues.createComment(context.issue({
-        body: `Issue registered on-chain with ID: ${issueId}`
-      }));
-    } catch (error: any) {
-      await context.octokit.issues.createComment(context.issue({
-        body: `Error registering issue on-chain: ${error.message}`
-      }));
+      switch (githubEvent) {
+        case 'issues':
+          if (body.action === 'opened') {
+            await handleIssueOpened(app, body);
+          }
+          break;
+        case 'issue_comment':
+          if (body.action === 'created') {
+            await handleIssueComment(app, body);
+          }
+          break;
+        case 'pull_request':
+          if (body.action === 'closed' && body.pull_request.merged) {
+            await handlePullRequestMerged(app, body);
+          }
+          break;
+        default:
+          console.log(`Unhandled GitHub event: ${githubEvent}`);
+      }
+      res.sendStatus(200);
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
+  });
+
+  expressApp.listen(8080, () => console.log('GitHub webhook server is running on port 8080'));
+
+  app.on('issues.opened', async (context) => {
+    await handleIssueOpened(app, context);
+  });
+
+  app.on('issue_comment.created', async (context) => {
+    await handleIssueComment(app, context);
   });
 
   app.on('pull_request.closed', async (context) => {
     if (context.payload.pull_request.merged) {
-      const prBody = context.payload.pull_request.body as string;
-      const issueId = parseIssueId(prBody);
-      const contributorMetamaskId = parseContributorMetamaskId(prBody);
-
-      if (issueId && contributorMetamaskId) {
-        try {
-          const tx = await daoContract.releaseFullBounty(issueId);
-          await tx.wait();
-
-          await context.octokit.issues.createComment(context.issue({
-            body: `Full bounty released to contributor (${contributorMetamaskId}) for Issue #${issueId}`
-          }));
-        } catch (error:any) {
-          await context.octokit.issues.createComment(context.issue({
-            body: `Error releasing full bounty: ${error.message}`
-          }));
-        }
-      }
-    }
-  });
-
-  zkReviewContract.on('SolutionVerified', async (issueId, contributor, solutionCID, event) => {
-    const context = contextMap[issueId.toString()];
-    try {
-      const issue = await zkReviewContract.issues(issueId);
-      const solutionData = JSON.parse((await ipfs.cat(solutionCID)).toString());
-
-      const branchName = `solution-${issueId}-${contributor.slice(0, 8)}`;
-      await createBranch(context, branchName);
-      await createOrUpdateFile(context, `solutions/issue-${issueId}-solution.js`, solutionData.code, branchName);
-
-      const pr = await context.octokit.pulls.create({
-        owner: context.payload.repository.owner.login,
-        repo: context.payload.repository.name,
-        title: `Solution for Issue #${issueId}`,
-        head: branchName,
-        base: 'main',
-        body: `This PR contains the solution for Issue #${issueId}\n\nContributor: ${contributor}\nMetamask ID: ${contributor}`
-      });
-
-      console.log(`Created PR #${pr.data.number} for Issue #${issueId}`);
-    } catch (error) {
-      console.error('Error creating PR:', error);
+      await handlePullRequestMerged(app, context);
     }
   });
 }
 
-async function fetchCircuits(): Promise<any[]> {
-  const circuitCount = await zkReviewContract.circuitCount();
-  const circuits = [];
+async function handleIssueOpened(app: Probot, context: any) {
+  const issueNumber = context.payload.issue.number;
 
-  for (let i = 0; i < circuitCount; i++) {
-    const circuitId = await zkReviewContract.circuitIds(i);
-    const circuit = await zkReviewContract.circuits(circuitId);
-    circuits.push({ id: circuitId, ...circuit });
+  await context.octokit.issues.createComment({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    issue_number: issueNumber,
+    body: 'Please provide the IPFS CID of the zk-circuits you have uploaded to the chain using the command:\n\n`/zkbot add-circuits [IPFS_CID]`'
+  });
+}
+
+async function handleIssueComment(app: Probot, context: any) {
+  const commentBody = context.payload.comment.body;
+  const issueNumber = context.payload.issue.number;
+
+  if (commentBody.startsWith('/zkbot')) {
+    const parts = commentBody.split(' ');
+    const command = parts[1];
+
+    switch (command) {
+      case 'add-circuits':
+        await handleAddCircuits(app, context, parts[2]);
+        break;
+      case 'hereisprove':
+        await handleHereIsProve(app, context, parts[2]);
+        break;
+      default:
+        await context.octokit.issues.createComment({
+          owner: REPO_OWNER,
+          repo: REPO_NAME,
+          issue_number: issueNumber,
+          body: 'Unknown command. Available commands are:\n- `/zkbot add-circuits [IPFS_CID]`\n- `/zkbot hereisprove [IPFS_CID]`'
+        });
+    }
+  }
+}
+
+async function handleAddCircuits(app: Probot, context: any, ipfsCID: string) {
+  const issueNumber = context.payload.issue.number;
+  const issueCreator = context.payload.issue.user.login;
+  const commenter = context.payload.comment.user.login;
+
+  if (commenter !== issueCreator) {
+    await context.octokit.issues.createComment({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      issue_number: issueNumber,
+      body: 'Only the issue creator can add circuits.'
+    });
+    return;
   }
 
-  return circuits;
+  try {
+    const tx = await zkReviewContract.registerCircuit(
+      `Circuit for Issue #${issueNumber}`,
+      `Circuit for GitHub issue #${issueNumber}`,
+      ipfsCID,
+      githubBotContract.address
+    );
+    await tx.wait();
+
+    await context.octokit.issues.createComment({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      issue_number: issueNumber,
+      body: `Circuits with IPFS CID ${ipfsCID} have been registered on-chain.`
+    });
+  } catch (error) {
+    await context.octokit.issues.createComment({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      issue_number: issueNumber,
+      body: `Error registering circuits: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
 }
 
-function formatCircuitList(circuits: any[]): string {
-  return circuits.map(circuit => 
-    `- ${circuit.name} (ID: ${circuit.id})\n  Description: ${circuit.description}\n  IPFS CID: ${circuit.ipfsCID}`
-  ).join('\n\n');
+async function handleHereIsProve(app: Probot, context: any, ipfsCID: string) {
+  const issueNumber = context.payload.issue.number;
+
+  try {
+    const proofData = await (await ipfs.cat(ipfsCID)).toString();
+    const { a, b, c, input } = JSON.parse(proofData);
+
+    const tx = await zkReviewContract.submitSolution(
+      issueNumber,
+      ipfsCID,
+      a,
+      b,
+      c,
+      input
+    );
+    await tx.wait();
+
+    await context.octokit.issues.createComment({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      issue_number: issueNumber,
+      body: `Solution with IPFS CID ${ipfsCID} has been submitted and verified on-chain.`
+    });
+
+    // Create a pull request with the solution
+    const branchName = `solution-${issueNumber}`;
+    await createBranch(context, branchName);
+    await createOrUpdateFile(context, `solutions/issue-${issueNumber}-solution.json`, proofData, branchName);
+
+    const pr = await context.octokit.pulls.create({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      title: `Solution for Issue #${issueNumber}`,
+      head: branchName,
+      base: 'main',
+      body: `This PR contains the verified solution for Issue #${issueNumber}\n\nIPFS CID: ${ipfsCID}`
+    });
+
+    console.log(`Created PR #${pr.data.number} for Issue #${issueNumber}`);
+  } catch (error) {
+    await context.octokit.issues.createComment({
+      owner: REPO_OWNER,
+      repo: REPO_NAME,
+      issue_number: issueNumber,
+      body: `Error submitting solution: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
 }
 
-function parseCircuitId(body: string): string | null {
-  const match = body.match(/Circuit ID:\s*(\S+)/);
-  return match ? match[1] : null;
-}
+async function handlePullRequestMerged(app: Probot, context: any) {
+  const prBody = context.payload.pull_request.body;
+  const issueIdMatch = prBody.match(/Issue #(\d+)/);
+  
+  if (issueIdMatch) {
+    const issueId = parseInt(issueIdMatch[1]);
+    try {
+      const tx = await githubBotContract.triggerBountyRelease(issueId);
+      await tx.wait();
 
-function parseBountyAmount(body: string): string | null {
-  const match = body.match(/Bounty Amount:\s*(\d+(\.\d+)?)/);
-  return match ? match[1] : null;
-}
-
-function parseMetamaskId(body: string): string | null {
-  const match = body.match(/Metamask ID:\s*(0x[a-fA-F0-9]{40})/);
-  return match ? match[1] : null;
-}
-
-function parseIssueId(body: string): number | null {
-  const match = body.match(/Issue #(\d+)/);
-  return match ? parseInt(match[1]) : null;
-}
-
-function parseContributorMetamaskId(body: string): string | null {
-  const match = body.match(/Contributor:\s*(0x[a-fA-F0-9]{40})/);
-  return match ? match[1] : null;
+      await context.octokit.issues.createComment({
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        issue_number: issueId,
+        body: `Full bounty release has been triggered for Issue #${issueId}`
+      });
+    } catch (error) {
+      await context.octokit.issues.createComment({
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        issue_number: issueId,
+        body: `Error triggering full bounty release: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
+  }
 }
 
 async function createBranch(context: any, branchName: string): Promise<void> {
-  const { data: ref } = await context.octokit.git.getRef(context.repo({
+  const { data: ref } = await context.octokit.git.getRef({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
     ref: 'heads/main'
-  }));
+  });
 
-  await context.octokit.git.createRef(context.repo({
+  await context.octokit.git.createRef({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
     ref: `refs/heads/${branchName}`,
     sha: ref.object.sha
-  }));
+  });
 }
 
 async function createOrUpdateFile(context: any, path: string, content: string, branch: string): Promise<void> {
-  const { data: file } = await context.octokit.repos.getContent(context.repo({
+  const { data: file } = await context.octokit.repos.getContent({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
     path,
     ref: branch
-  })).catch(() => ({ data: null }));
+  }).catch(() => ({ data: null }));
 
-  await context.octokit.repos.createOrUpdateFileContents(context.repo({
+  await context.octokit.repos.createOrUpdateFileContents({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
     path,
-    message: `Add solution for issue #${parseIssueId(content)}`,
+    message: `Add solution for issue #${path.split('-')[1].split('.')[0]}`,
     content: Buffer.from(content).toString('base64'),
     branch,
     sha: file ? file.sha : undefined
-  }));
+  });
 }
