@@ -4,15 +4,22 @@ import { create } from 'ipfs-http-client';
 import fs from 'fs/promises';
 import path from 'path';
 
-const provider = new ethers.providers.JsonRpcProvider(process.env.PROVIDER_URL!);
-const signer = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+const ZK_REVIEW_ABI:any=[]
+const DAO_ABI:any=[]
+const wallet = ethers.Wallet.createRandom();
+
+const provider = new ethers.JsonRpcProvider(process.env.PROVIDER_URL!);
+const signer = new ethers.Wallet(wallet.privateKey, provider);
 const zkReviewContract = new ethers.Contract(process.env.ZK_REVIEW_CONTRACT_ADDRESS!, ZK_REVIEW_ABI, signer);
 const daoContract = new ethers.Contract(process.env.DAO_CONTRACT_ADDRESS!, DAO_ABI, signer);
 const ipfs = create({ url: process.env.IPFS_URL });
-
+const contextMap: Record<string, any> = {};
 export default function(app: Probot) {
   app.on('issues.opened', async (context) => {
-    const issueBody = context.payload.issue.body;
+    const issueId = context.payload.issue.id.toString();
+    contextMap[issueId] = context; 
+    const issueBody = context.payload.issue.body as string;
     const issueCreator = context.payload.issue.user.login;
 
     const circuitId = parseCircuitId(issueBody);
@@ -31,9 +38,13 @@ export default function(app: Probot) {
         context.payload.issue.title,
         context.payload.issue.body,
         circuitId,
-        { value: ethers.utils.parseEther(bountyAmount) }
+        { value: ethers.parseEther(bountyAmount) }
       );
-      await tx.wait();
+     // Log transaction response
+  console.log("Transaction response:", tx);
+
+  const receipt = await tx.wait();
+  console.log("Transaction receipt:", receipt);
 
       const issueId = await zkReviewContract.issueCount();
 
@@ -47,7 +58,7 @@ export default function(app: Probot) {
       await context.octokit.issues.createComment(context.issue({
         body: `Issue registered on-chain with ID: ${issueId}`
       }));
-    } catch (error) {
+    } catch (error: any) {
       await context.octokit.issues.createComment(context.issue({
         body: `Error registering issue on-chain: ${error.message}`
       }));
@@ -56,7 +67,7 @@ export default function(app: Probot) {
 
   app.on('pull_request.closed', async (context) => {
     if (context.payload.pull_request.merged) {
-      const prBody = context.payload.pull_request.body;
+      const prBody = context.payload.pull_request.body as string;
       const issueId = parseIssueId(prBody);
       const contributorMetamaskId = parseContributorMetamaskId(prBody);
 
@@ -68,7 +79,7 @@ export default function(app: Probot) {
           await context.octokit.issues.createComment(context.issue({
             body: `Full bounty released to contributor (${contributorMetamaskId}) for Issue #${issueId}`
           }));
-        } catch (error) {
+        } catch (error:any) {
           await context.octokit.issues.createComment(context.issue({
             body: `Error releasing full bounty: ${error.message}`
           }));
@@ -78,6 +89,7 @@ export default function(app: Probot) {
   });
 
   zkReviewContract.on('SolutionVerified', async (issueId, contributor, solutionCID, event) => {
+    const context = contextMap[issueId.toString()];
     try {
       const issue = await zkReviewContract.issues(issueId);
       const solutionData = JSON.parse((await ipfs.cat(solutionCID)).toString());
