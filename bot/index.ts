@@ -7,10 +7,10 @@ import path from 'path';
 
 const ZK_REVIEW_ABI:any=[]
 const DAO_ABI:any=[]
-const wallet = ethers.Wallet.createRandom();
+
 
 const provider = new ethers.JsonRpcProvider(process.env.PROVIDER_URL!);
-const signer = new ethers.Wallet(wallet.privateKey, provider);
+const signer = new ethers.Wallet(process.env.KEY!, provider);
 const zkReviewContract = new ethers.Contract(process.env.ZK_REVIEW_CONTRACT_ADDRESS!, ZK_REVIEW_ABI, signer);
 const daoContract = new ethers.Contract(process.env.DAO_CONTRACT_ADDRESS!, DAO_ABI, signer);
 const ipfs = create({ url: process.env.IPFS_URL });
