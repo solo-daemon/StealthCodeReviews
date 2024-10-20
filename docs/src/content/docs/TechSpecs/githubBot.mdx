@@ -1,0 +1,26 @@
+---
+title: GithubBot
+description: githubbot
+---
+### UX of GithubBot
+
+import { Steps } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. Issue creator creates an issue then publishes circuit to `IPFS` and verifier contract (`verify.sol`) to chain then uses bot to register these to the `ZKCodeReview.sol` contract.
+
+   ```bash
+   /zkbot add-circuit [ipfs-cid] [contract-address]
+   ```
+
+2. Contributor creates a ZK-proof and publishes code to IPFS then provides it to the bot .
+
+    ```bash
+    /zkbot hereisproof [proof-link] [ipfs-cid]
+    ```
+3. Bot allocates part of the bounty on verification of the proof and creates PR with the code fetched from IPFS and then when merged full bounty will be allocated to the contributor
+</Steps>
+
+<Aside type="caution" title="Fail Safe Mechanism"> If the contributor defaults he will be reported and blocked</Aside>

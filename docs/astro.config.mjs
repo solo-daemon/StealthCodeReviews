@@ -16,18 +16,19 @@ export default defineConfig({
     sidebar: [{
       label: '[home] Home',
       link: '/'
-    }, {
-      label: '[list] Features',
-      link: '/features/'
-    }, {
-      label: '[box] Project Specs',
+    },  {
+      label: '[box] Features',
+      link : '/features'
+    },
+      {
+      label: '[box] Project Parts',
       autogenerate: {
-        directory: 'project-specs'
+        directory: 'TechSpecs'
       }
     }, {
       label: '[book] Reference',
       autogenerate: {
-        directory: 'reference'
+        directory: 'Reference'
       }
     }],
     components: {
