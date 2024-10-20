@@ -3,7 +3,7 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://louisescher.github.io',
+  site: 'https://solo-daemon.github.io/StealthCodeReviews/',
   base: '/StealthCodeReviews',
   integrations: [starlight({
     title: 'Stealth Code Reviews',
@@ -11,7 +11,7 @@ export default defineConfig({
       src: './src/assets/stealth-code-reviews-logo.png'
     },
     social: {
-      github: 'https://github.com/solo-daemon/stealth-code-reviews'
+      github: 'https://github.com/solo-daemon/StealthCodeReviews'
     },
     sidebar: [{
       label: '[home] Home',
