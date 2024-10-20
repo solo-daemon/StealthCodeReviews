@@ -4,7 +4,7 @@ import starlight from '@astrojs/starlight';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://louisescher.github.io',
-  base: '/starlight-ion-theme',
+  base: '/StealthCodeReviews',
   integrations: [starlight({
     title: 'Stealth Code Reviews',
     logo: {
@@ -16,9 +16,6 @@ export default defineConfig({
     sidebar: [{
       label: '[home] Home',
       link: '/'
-    },  {
-      label: '[box] Features',
-      link : '/features'
     },
       {
       label: '[box] Project Parts',
